@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 import os
+import time
 import math
 import csv
 import cv2.aruco as aruco
@@ -31,18 +32,25 @@ def calcPSF(filter_height, filter_width, length, theta):
 	h = h #/ sum_h
 	return h
 
-def power_spectral_density(orig_img, beta):
-    S_0 =  (np.absolute(np.fft.fftshift(np.fft.fft2(orig_img[...,0])))**2)/beta
-    S_1 =  (np.absolute(np.fft.fftshift(np.fft.fft2(orig_img[...,1])))**2)/beta
-    S_2 =  (np.absolute(np.fft.fftshift(np.fft.fft2(orig_img[...,2])))**2)/beta
-    return S_0, S_1, S_2
+#####################
+# Need not calculate S three times,
+# cause they don't differ from each 
+# other much,  And we need faster 
+# operations while working on video feed
+#####################
+
+# def power_spectral_density(orig_img, beta):
+#     S_0 =  (np.absolute(np.fft.fftshift(np.fft.fft2(orig_img[...,0])))**2)/beta
+#     S_1 =  (np.absolute(np.fft.fftshift(np.fft.fft2(orig_img[...,1])))**2)/beta
+#     S_2 =  (np.absolute(np.fft.fftshift(np.fft.fft2(orig_img[...,2])))**2)/beta
+#     return S_0, S_1, S_2
 
 
 def apply_kernel(img, kernel, S):
 	new_img = np.zeros(img.shape)
-	new_img[...,0] = wiener_filter(img[...,0], kernel, S[0])
-	new_img[...,1] = wiener_filter(img[...,1], kernel, S[1])
-	new_img[...,2] = wiener_filter(img[...,2], kernel, S[2])
+	new_img[...,0] = wiener_filter(img[...,0], kernel, S)
+	new_img[...,1] = wiener_filter(img[...,1], kernel, S)
+	new_img[...,2] = wiener_filter(img[...,2], kernel, S)
 	return new_img
 
 
@@ -55,7 +63,7 @@ def deblur(ip_image, len_psf, theta, beta, orig_img):
     # ip_image = cv2.convertScaleAbs(ip_image, alpha=alpha, beta=beta)
 
     # Calculate power spectral density
-    S = power_spectral_density(orig_img, beta)
+    S = (np.absolute(np.fft.fftshift(np.fft.fft2(orig_img[...,0])))**2)/beta
     
     # weiner kernel
     h_kernel = calcPSF(20, 20, len_psf, theta)
@@ -67,16 +75,34 @@ def deblur(ip_image, len_psf, theta, beta, orig_img):
 
     # # post processing to remove ringing
     # processed_img = cv2.medianBlur(norm_img, 3)
+    norm_img = cv2.bilateralFilter(norm_img,9,75,75)
 
     # # Increase contrast of filtered image
-    # alpha = 2.5   # contrast
-    # beta = 5   # brightness 
-    # output_img = cv2.convertScaleAbs(processed_img, alpha=alpha, beta=beta)
-    output_img = norm_img
-    return output_img, h_kernel, S[0], filtered_img, norm_img
+    alpha = 2.5   # contrast
+    beta = 5   # brightness 
+    output_img = cv2.convertScaleAbs(norm_img, alpha=alpha, beta=beta)
+    # output_img = norm_img
+    return output_img, h_kernel, S, filtered_img, norm_img
+
+def draw_ellipse(theta):
+	h = np.zeros((400, 400))
+	y, x = 200, 200
+	h = cv2.ellipse(h, (y, x), (50, 200), theta, 0, 360, 255, cv2.FILLED)    # Drawing ellipse
+	return h
+
+
 
 def callback(*arg):
     pass
+
+
+def check_ellipse_angle():
+    for theta in range(360):
+        ellipse = draw_ellipse(theta)
+        time.sleep(0.2)
+        cv2.imshow('ellipse', ellipse)
+        cv2.waitKey(1)
+    cv2.destroyAllWindows()
 
 def main():
     cap = cv2.VideoCapture("Videos/WIN_20200204_22_29_57_Pro.mp4")
@@ -87,43 +113,67 @@ def main():
  
     # add frame_init here (picture of the arena)
     # frame_init = cv2.imread("original_img.jpg") 
-    ret,frame_init = cap.read() 
- 
+    ret,frame = cap.read() 
+    
+    frame_init = frame
     # trackbars for hyperparams 
     cv2.namedWindow("Frame")
-    cv2.createTrackbar("Len_PSF","Frame",2,40,callback)
-    cv2.createTrackbar("Beta","Frame",1000, 10000,callback)
+    cv2.createTrackbar("Len_PSF","Frame",4,40,callback)
+    cv2.createTrackbar("Beta","Frame",6000, 10000,callback)
 
+    det_normal, det_deblur, nd = 0, 0, 0
     theta = 0
+    ellipse = draw_ellipse(theta)
+    deblurred_img = None
     while(ret):
-        ret,frame = cap.read()
-        cv2.imshow("Frame",frame)
         
         len_psf = cv2.getTrackbarPos('Len_PSF','Frame')
         beta = cv2.getTrackbarPos('Beta','Frame')
-        deblurred_img, kernel, S, filtered_img, norm_img = deblur(frame, len_psf, theta, beta, frame_init)
+        
+        # Try finding aruco on normal image
+        # Else deblur then try again
+        aruco_list = detect_aruco(frame)            
+        if aruco_list is None:
+            try:
+                deblurred_img, kernel, S, filtered_img, norm_img = deblur(frame, len_psf, theta, beta, frame_init)
+                aruco_list = detect_aruco(deblurred_img)
+                # frame, aruco_centre = mark_Aruco(frame, aruco_list)
+                state = calculate_Robot_State(deblurred_img, aruco_list)
+                # 1. The bot is moving anti-clockwise while ellipse moves clockwise hence negative
+                # 2. +90, cause deblurring is PERPENDICULAR to direction of ellipse
+                theta = -state[25][3] + 90
+                ellipse = draw_ellipse(theta)
+                print(f"\t\t\tDetected Blurred Aruco\t theta:{theta}")
+                det_deblur += 1
+            except:
+                print("ND")
+                nd += 1
+        else:
+            state = calculate_Robot_State(frame, aruco_list)
+            theta = -state[25][3] + 90
+            ellipse = draw_ellipse(theta)
+            print(f"Detected Arucooo\t theta:{theta}")
+            det_normal += 1
 
-        # Marking aruco 
-        try:
-            aruco_list = detect_aruco(deblurred_img)
-            # frame, aruco_centre = mark_Aruco(frame, aruco_list)
-            state = calculate_Robot_State(deblurred_img, aruco_list)
-            theta = state[0][3]
-            print("Detected Aruco")
-        except:
-            pass
-
-        cv2.imshow("S", S)
-        cv2.imshow("h_kernel", kernel)
-        cv2.imshow("filtered_img_1",filtered_img)
+        
+        
+        # cv2.imshow("S", S)
+        cv2.imshow("Frame",frame)
+        # cv2.imshow("h_kernel", kernel)
+        cv2.imshow('ellipse', ellipse)
+        # cv2.imshow("filtered_img_1",filtered_img)
         # cv2.imshow("norm_img_2",norm_img)
         # cv2.imshow("processed_img_3",processed_img)
-        cv2.imshow("deblurred_img_4",deblurred_img)
+        if deblurred_img is not None:
+            cv2.imshow("deblurred_img_4",deblurred_img)
         
         cv2.waitKey(int(100/fps))
+        ret,frame = cap.read()
     cv2.destroyAllWindows()
     
+    print(f"Detected Normally: {det_normal}\t Detected after deblurring: {det_deblur}\t Not detected:{nd}")
     cap.release()
     cv2.destroyAllWindows()
 
 main()
+# check_ellipse_angle()
