@@ -87,6 +87,9 @@ def deblur(ip_image,LEN,THETA, frame_init):
     output_img = ip_image
     return output_img, h_kernel, S[0]
 
+def callback(*arg):
+    pass
+
 def main():
     cap = cv2.VideoCapture("Videos/WIN_20200204_22_29_57_Pro.mp4")
     fps = cap.get(cv2.CAP_PROP_FPS)
@@ -102,21 +105,20 @@ def main():
     print(keys)
     LEN = 10
     THETA = calculate_Robot_State(frame_init,aruco_list)[keys[0]][3]
-    while(ret):       
-        ret,frame = cap.read()
-        black_white = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        cv2.imshow("black_white", black_white)
-        cv2.imshow("frame", frame)
-        deblurred_img, kernel, S = deblur(black_white,LEN,THETA,frame_init)
-        THETA = calculate_Robot_State(deblurred_img,aruco_list)[keys[0]][3]
-        print(THETA)
-        #frame init is the first frame for calculating psf
-        cv2.imshow("deblurred_img",deblurred_img)
-        cv2.imshow("kernel", kernel)
-        cv2.imshow("S", S)
-        print(kernel)
-        cv2.waitKey(int(1000/fps))
-
+    THETA = 24    
+    #trackbars to change len, theta 
+    cv2.namedWindow("set psf filter")
+    cv2.createTrackbar("LEN","set psf filter",0,10,callback)
+    cv2.createTrackbar("THETA","set psf filter",0,45,callback)
+    while(ret):
+        ret,frame = cap.read() 
+        cv2.imshow("set psf filter",frame)
+        LEN = cv2.getTrackbarPos('LEN','set psf filter')
+        THETA = cv2.getTrackbarPos('THETA','set psf filter')
+        deblurred_img, kernel,S = deblur(frame,LEN,THETA,frame_init)
+        cv2.imshow("set psf filter",deblurred_img)
+        cv2.waitKey(int(100/fps))
+    cv2.destroyAllWindows()
     
     cap.release()
     cv2.destroyAllWindows()
