@@ -46,46 +46,34 @@ def apply_kernel(img, kernel, S):
 	return new_img
 
 
-def deblur(ip_image,LEN,THETA, frame_init):
+def deblur(ip_image, len_psf, theta, beta, orig_img):
     id_list = []
     
     # Increase the contrast of image
-    alpha = 2 # contrast
-    beta = 10   # brightness
-    ip_image = cv2.convertScaleAbs(ip_image, alpha=alpha, beta=beta)
-    
-    # original image
-    #!!!!!!!!!! orig_img has been changed
-    orig_img = frame_init
-    #!!!!!!!!
-    orig_y, orig_x = orig_img.shape[:2]
-    pad_y, pad_x = int(ip_image.shape[0] - orig_y), int(ip_image.shape[1] - orig_x)
-    pad_orig_img = np.pad(orig_img, ((0, pad_y), (0, pad_x), (0,0)), constant_values=(255)) # pad with 255
-    
+    # alpha = 2 # contrast
+    # beta = 10   # brightness
+    # ip_image = cv2.convertScaleAbs(ip_image, alpha=alpha, beta=beta)
+
     # Calculate power spectral density
-    BETA = 2500
-    S = power_spectral_density(pad_orig_img, BETA)
+    S = power_spectral_density(orig_img, beta)
     
     # weiner kernel
-    #!!!!!!!!!! changes here
-    h_kernel = calcPSF(20, 20, LEN, THETA)
-    #!!111!!!!!!!
+    h_kernel = calcPSF(20, 20, len_psf, theta)
     filtered_img = apply_kernel(ip_image, h_kernel, S)
 
     # Restored filtered image
-    filtered_img = cv2.normalize(filtered_img, None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_8U)
+    norm_img = cv2.normalize(filtered_img, None, alpha=0, beta=255, 
+                                norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_8U)
 
-    # post processing to remove ringing
-    processed_img = cv2.medianBlur(filtered_img, 3)
+    # # post processing to remove ringing
+    # processed_img = cv2.medianBlur(norm_img, 3)
 
-    #Increase contrast of filtered image
-    alpha = 2.5   # contrast
-    beta = 5   # brightness 
-    output_img = cv2.convertScaleAbs(processed_img, alpha=alpha, beta=beta)
-    ip_image = output_img
-    #output_img = processed_img
-    output_img = ip_image
-    return output_img, h_kernel, S[0]
+    # # Increase contrast of filtered image
+    # alpha = 2.5   # contrast
+    # beta = 5   # brightness 
+    # output_img = cv2.convertScaleAbs(processed_img, alpha=alpha, beta=beta)
+    output_img = norm_img
+    return output_img, h_kernel, S[0], filtered_img, norm_img
 
 def callback(*arg):
     pass
@@ -97,26 +85,41 @@ def main():
     cap.set(3, 640)
     cap.set(4, 480)
  
-    #add frame_init here (picture of the arena)
-    #frame_init = cv2.imread("original_img.jpg") 
+    # add frame_init here (picture of the arena)
+    # frame_init = cv2.imread("original_img.jpg") 
     ret,frame_init = cap.read() 
-    aruco_list = detect_aruco(frame_init)
-    keys = list(aruco_list.keys())
-    print(keys)
-    LEN = 10
-    THETA = calculate_Robot_State(frame_init,aruco_list)[keys[0]][3]
-    THETA = 24    
-    #trackbars to change len, theta 
-    cv2.namedWindow("set psf filter")
-    cv2.createTrackbar("LEN","set psf filter",0,10,callback)
-    cv2.createTrackbar("THETA","set psf filter",0,45,callback)
+ 
+    # trackbars for hyperparams 
+    cv2.namedWindow("Frame")
+    cv2.createTrackbar("Len_PSF","Frame",2,40,callback)
+    cv2.createTrackbar("Beta","Frame",1000, 10000,callback)
+
+    theta = 0
     while(ret):
-        ret,frame = cap.read() 
-        cv2.imshow("set psf filter",frame)
-        LEN = cv2.getTrackbarPos('LEN','set psf filter')
-        THETA = cv2.getTrackbarPos('THETA','set psf filter')
-        deblurred_img, kernel,S = deblur(frame,LEN,THETA,frame_init)
-        cv2.imshow("set psf filter",deblurred_img)
+        ret,frame = cap.read()
+        cv2.imshow("Frame",frame)
+        
+        len_psf = cv2.getTrackbarPos('Len_PSF','Frame')
+        beta = cv2.getTrackbarPos('Beta','Frame')
+        deblurred_img, kernel, S, filtered_img, norm_img = deblur(frame, len_psf, theta, beta, frame_init)
+
+        # Marking aruco 
+        try:
+            aruco_list = detect_aruco(deblurred_img)
+            # frame, aruco_centre = mark_Aruco(frame, aruco_list)
+            state = calculate_Robot_State(deblurred_img, aruco_list)
+            theta = state[0][3]
+            print("Detected Aruco")
+        except:
+            pass
+
+        cv2.imshow("S", S)
+        cv2.imshow("h_kernel", kernel)
+        cv2.imshow("filtered_img_1",filtered_img)
+        # cv2.imshow("norm_img_2",norm_img)
+        # cv2.imshow("processed_img_3",processed_img)
+        cv2.imshow("deblurred_img_4",deblurred_img)
+        
         cv2.waitKey(int(100/fps))
     cv2.destroyAllWindows()
     
@@ -124,6 +127,3 @@ def main():
     cv2.destroyAllWindows()
 
 main()
-
-#if __name__ == '__main__':
-#    main(input("time value in seconds:")) 
