@@ -54,7 +54,7 @@ def apply_kernel(img, kernel, S):
 	return new_img
 
 
-def deblur(ip_image, len_psf, theta, beta, orig_img):
+def deblur(ip_image, len_psf, theta, beta, d, sigmaColor, sigmaSpace, orig_img):
     id_list = []
     
     # Increase the contrast of image
@@ -72,13 +72,13 @@ def deblur(ip_image, len_psf, theta, beta, orig_img):
     # Restored filtered image
     norm_img = cv2.normalize(filtered_img, None, alpha=0, beta=255, 
                                 norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_8U)
-
+    
     # # post processing to remove ringing
     # processed_img = cv2.medianBlur(norm_img, 3)
-    norm_img = cv2.bilateralFilter(norm_img,9,75,75)
-
+    norm_img = cv2.bilateralFilter(norm_img,d,sigmaColor,sigmaSpace)
+    
     # # Increase contrast of filtered image
-    alpha = 2.5   # contrast
+    alpha = 3   # contrast
     beta = 5   # brightness 
     output_img = cv2.convertScaleAbs(norm_img, alpha=alpha, beta=beta)
     # output_img = norm_img
@@ -96,16 +96,17 @@ def callback(*arg):
     pass
 
 
-def check_ellipse_angle():
-    for theta in range(360):
-        ellipse = draw_ellipse(theta)
-        time.sleep(0.2)
-        cv2.imshow('ellipse', ellipse)
-        cv2.waitKey(1)
-    cv2.destroyAllWindows()
+# def check_ellipse_angle():
+#     for theta in range(360):
+#         ellipse = draw_ellipse(theta)
+#         time.sleep(0.2)
+#         cv2.imshow('ellipse', ellipse)
+#         cv2.waitKey(1)
+#     cv2.destroyAllWindows()
+
 
 def main():
-    cap = cv2.VideoCapture("Videos/WIN_20200204_22_29_57_Pro.mp4")
+    cap = cv2.VideoCapture("Videos/video_mid.mp4")
     fps = cap.get(cv2.CAP_PROP_FPS)
     # setting video counter to frame sequence
     cap.set(3, 640)
@@ -118,31 +119,38 @@ def main():
     frame_init = frame
     # trackbars for hyperparams 
     cv2.namedWindow("Frame")
-    cv2.createTrackbar("Len_PSF","Frame",4,40,callback)
+    cv2.createTrackbar("Len_PSF","Frame",5,40,callback)
     cv2.createTrackbar("Beta","Frame",6000, 10000,callback)
+    cv2.createTrackbar("d","Frame",4,20,callback)
+    cv2.createTrackbar("sigmaColor","Frame",30,100,callback)
+    cv2.createTrackbar("sigmaSpace","Frame",30, 100,callback)
 
     det_normal, det_deblur, nd = 0, 0, 0
     theta = 0
-    ellipse = draw_ellipse(theta)
+    #ellipse = draw_ellipse(theta)
     deblurred_img = None
     while(ret):
         
-        len_psf = cv2.getTrackbarPos('Len_PSF','Frame')
-        beta = cv2.getTrackbarPos('Beta','Frame')
         
         # Try finding aruco on normal image
         # Else deblur then try again
         aruco_list = detect_aruco(frame)            
         if aruco_list is None:
             try:
-                deblurred_img, kernel, S, filtered_img, norm_img = deblur(frame, len_psf, theta, beta, frame_init)
+                len_psf = cv2.getTrackbarPos('Len_PSF','Frame')
+                beta = cv2.getTrackbarPos('Beta','Frame')
+                d = cv2.getTrackbarPos('d','Frame')
+                sigmaColor = cv2.getTrackbarPos('sigmaColor','Frame')
+                sigmaSpace = cv2.getTrackbarPos('sigmaSpace','Frame')
+      
+                deblurred_img, kernel, S, filtered_img, norm_img = deblur(frame, len_psf, theta, beta, d, sigmaColor, sigmaSpace, frame_init)
                 aruco_list = detect_aruco(deblurred_img)
                 # frame, aruco_centre = mark_Aruco(frame, aruco_list)
                 state = calculate_Robot_State(deblurred_img, aruco_list)
                 # 1. The bot is moving anti-clockwise while ellipse moves clockwise hence negative
                 # 2. +90, cause deblurring is PERPENDICULAR to direction of ellipse
                 theta = -state[25][3] + 90
-                ellipse = draw_ellipse(theta)
+                #ellipse = draw_ellipse(theta)
                 print(f"\t\t\tDetected Blurred Aruco\t theta:{theta}")
                 det_deblur += 1
             except:
@@ -151,21 +159,21 @@ def main():
         else:
             state = calculate_Robot_State(frame, aruco_list)
             theta = -state[25][3] + 90
-            ellipse = draw_ellipse(theta)
+            #ellipse = draw_ellipse(theta)
             print(f"Detected Arucooo\t theta:{theta}")
             det_normal += 1
 
         
         
         # cv2.imshow("S", S)
-        cv2.imshow("Frame",frame)
-        # cv2.imshow("h_kernel", kernel)
-        cv2.imshow('ellipse', ellipse)
-        # cv2.imshow("filtered_img_1",filtered_img)
-        # cv2.imshow("norm_img_2",norm_img)
-        # cv2.imshow("processed_img_3",processed_img)
-        if deblurred_img is not None:
-            cv2.imshow("deblurred_img_4",deblurred_img)
+        # cv2.imshow("Frame",frame)
+        # # cv2.imshow("h_kernel", kernel)
+        # # cv2.imshow('ellipse', ellipse)
+        # # cv2.imshow("filtered_img_1",filtered_img)
+        # # cv2.imshow("norm_img_2",norm_img)
+        # # cv2.imshow("processed_img_3",processed_img)
+        # if deblurred_img is not None:
+        #     cv2.imshow("deblurred_img_4",deblurred_img)
         
         cv2.waitKey(int(100/fps))
         ret,frame = cap.read()
@@ -176,4 +184,3 @@ def main():
     cv2.destroyAllWindows()
 
 main()
-# check_ellipse_angle()
