@@ -32,14 +32,11 @@ def detect_origin(purple_region,img):
     return (x0, y0),img
 
 
-def detect_coins(purple_region,colour_low,colour_high,colour):
+def detect_coins(purple_region,low,high,colour):
     purple_region = cv2.cvtColor(purple_region,cv2.COLOR_BGR2HSV)
     final_mask = np.zeros_like(purple_region)[..., 0]
-   
-    for low, high in zip(colour_low, colour_high):
-        colour_mask = cv2.inRange(purple_region, low, high)
-        final_mask = cv2.bitwise_or(final_mask, colour_mask)
-        break
+    colour_mask = cv2.inRange(purple_region, low, high)
+    final_mask = cv2.bitwise_or(final_mask, colour_mask)
     colour_mask = filter_img(final_mask)
     coins = min_area_contour(colour_mask,purple_region,colour)
     return coins
@@ -47,6 +44,9 @@ def detect_coins(purple_region,colour_low,colour_high,colour):
 
 def min_area_contour(mask,img,colour):
     cnt,hierarchy = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    cv2.drawContours(img,cnt,-1,(0,0,0),2)
+    cv2.imshow("coins",img)
+    cv2.waitKey(0)
     area = []
     coins = []
     for i in range(len(cnt)):
@@ -55,6 +55,14 @@ def min_area_contour(mask,img,colour):
     (x1,y1),rad1 = cv2.minEnclosingCircle(cnt[area_min])
     coin1 = (int(x1),int(y1))
     coins.append(coin1)
+    
+    if colour == "green":
+        del area[area_min]
+        del cnt[area_min]
+        area_min_2 = np.argmin(area)
+        (x2,y2),rad2 = cv2.minEnclosingCircle(cnt[area_min_2])
+        coin2 = (int(x2),int(y2))
+        coins.append(coin2)
     return coins
      
 def get_coordinates(highway,img):

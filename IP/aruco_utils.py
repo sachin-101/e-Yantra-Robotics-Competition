@@ -67,9 +67,9 @@ def draw_aruco(img,aruco_list):
         orient_centre = centre + [0.0,5.0]
         centre = tuple(centre)  
         orient_centre = tuple((dict_entry[0]+dict_entry[1])/2)
-        cv2.circle(img,centre,1,(0,0,255),8)
-        cv2.circle(img,orient_centre,1,(0,0,255),8)
-        cv2.line(img,centre,orient_centre,(255,0,0),4) #marking the centre of aruco
+        # cv2.circle(img,centre,1,(0,0,255),8)
+        # cv2.circle(img,orient_centre,1,(0,0,255),8)
+        # cv2.line(img,centre,orient_centre,(255,0,0),4) #marking the centre of aruco
     return img, centre
 
 def track_aruco(img):
