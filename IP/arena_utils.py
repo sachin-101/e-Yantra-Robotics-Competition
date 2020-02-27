@@ -44,9 +44,6 @@ def detect_coins(purple_region,low,high,colour):
 
 def min_area_contour(mask,img,colour):
     cnt,hierarchy = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    cv2.drawContours(img,cnt,-1,(0,0,0),2)
-    cv2.imshow("coins",img)
-    cv2.waitKey(0)
     area = []
     coins = []
     for i in range(len(cnt)):

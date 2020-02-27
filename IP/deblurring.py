@@ -71,70 +71,64 @@ def deblur(ip_image, len_psf, theta, beta, d, sigmaColor, sigmaSpace, orig_img):
     # output_img = norm_img
     return output_img, h_kernel, S, filtered_img, norm_img
 
-def draw_ellipse(theta):
-	h = np.zeros((400, 400))
-	y, x = 200, 200
-	h = cv2.ellipse(h, (y, x), (50, 200), theta, 0, 360, 255, cv2.FILLED)    # Drawing ellipse
-	return h
-
+# def draw_ellipse(theta):
+# 	h = np.zeros((400, 400))
+# 	y, x = 200, 200
+# 	h = cv2.ellipse(h, (y, x), (50, 200), theta, 0, 360, 255, cv2.FILLED)    # Drawing ellipse
+# 	return h
 
 
 def callback(*arg):
     pass
 
 
-
-
-def aruco_using_deblur(frame):
+# def aruco_using_deblur(frame):
     
-    frame_init = frame
-    # trackbars for hyperparams 
-    cv2.namedWindow("Frame")
-    cv2.createTrackbar("Len_PSF","Frame",5,40,callback)
-    cv2.createTrackbar("Beta","Frame",6000, 10000,callback)
-    cv2.createTrackbar("d","Frame",4,20,callback)
-    cv2.createTrackbar("sigmaColor","Frame",30,100,callback)
-    cv2.createTrackbar("sigmaSpace","Frame",30, 100,callback)
+#     # frame_init = frame
+#     # # trackbars for hyperparams 
+#     # cv2.namedWindow("Frame")
+#     # cv2.createTrackbar("Len_PSF","Frame",5,40,callback)
+#     # cv2.createTrackbar("Beta","Frame",6000, 10000,callback)
+#     # cv2.createTrackbar("d","Frame",4,20,callback)
+#     # cv2.createTrackbar("sigmaColor","Frame",30,100,callback)
+#     # cv2.createTrackbar("sigmaSpace","Frame",30, 100,callback)
 
-    det_normal, det_deblur, nd = 0, 0, 0
-    theta = 0
-    #ellipse = draw_ellipse(theta)
-    deblurred_img = None
+#     # det_normal, det_deblur, nd = 0, 0, 0
+#     # theta = 0
+#     #ellipse = draw_ellipse(theta)
+#     # deblurred_img = None
         
-    # Try finding aruco on normal image
-    # Else deblur then try again
-    aruco_list = detect_aruco(frame)            
-    if aruco_list is None:
-        try:
-            len_psf = cv2.getTrackbarPos('Len_PSF','Frame')
-            beta = cv2.getTrackbarPos('Beta','Frame')
-            d = cv2.getTrackbarPos('d','Frame')
-            sigmaColor = cv2.getTrackbarPos('sigmaColor','Frame')
-            sigmaSpace = cv2.getTrackbarPos('sigmaSpace','Frame')
+#     # Try finding aruco on normal image
+#     # Else deblur then try again
+#     aruco_list = detect_aruco(frame)            
+#     if aruco_list is None:
+#         try:
+#             # len_psf = cv2.getTrackbarPos('Len_PSF','Frame')
+#             # beta = cv2.getTrackbarPos('Beta','Frame')
+#             # d = cv2.getTrackbarPos('d','Frame')
+#             # sigmaColor = cv2.getTrackbarPos('sigmaColor','Frame')
+#             # sigmaSpace = cv2.getTrackbarPos('sigmaSpace','Frame')
     
-            deblurred_img, kernel, S, filtered_img, norm_img = deblur(frame, len_psf, theta, beta, d, sigmaColor, sigmaSpace, frame_init)
-            aruco_list = detect_aruco(deblurred_img)
-            # frame, aruco_centre = mark_Aruco(frame, aruco_list)
-            state = calculate_Robot_State(deblurred_img, aruco_list)
-            # 1. The bot is moving anti-clockwise while ellipse moves clockwise hence negative
-            # 2. +90, cause deblurring is PERPENDICULAR to direction of ellipse
-            theta = -state[25][3] + 90
-            #ellipse = draw_ellipse(theta)
-            print(f"\t\t\tDetected Blurred Aruco\t theta:{theta}")
-            det_deblur += 1
-            aruco_center = track_aruco(deblurred_img)
-            return aruco_center
-        except:
-            print("ND")
-            return None 
-            nd += 1
-    else:
-        state = calculate_Robot_State(frame, aruco_list)
-        theta = -state[25][3] + 90
-        #ellipse = draw_ellipse(theta)
-        det_normal += 1
-        aruco_center = track_aruco(frame)
-        return aruco_center
-
-    print(f"Detected Normally: {det_normal}\t Detected after deblurring: {det_deblur}\t Not detected:{nd}")
-
+#             deblurred_img, kernel, S, filtered_img, norm_img = deblur(frame, len_psf, theta, beta, d, sigmaColor, sigmaSpace, frame_init)
+#             aruco_list = detect_aruco(deblurred_img)
+#             # frame, aruco_centre = mark_Aruco(frame, aruco_list)
+#             state = calculate_Robot_State(deblurred_img, aruco_list)
+#             # 1. The bot is moving anti-clockwise while ellipse moves clockwise hence negative
+#             # 2. +90, cause deblurring is PERPENDICULAR to direction of ellipse
+#             theta = -state[25][3] + 90
+#             #ellipse = draw_ellipse(theta)
+#             print(f"\t\t\tDetected Blurred Aruco\t theta:{theta}")
+#             det_deblur += 1
+#             aruco_center = track_aruco(deblurred_img)
+#             return aruco_center
+#         except:
+#             print("ND")
+#             return None 
+#             nd += 1
+#     else:
+#         state = calculate_Robot_State(frame, aruco_list)
+#         theta = -state[25][3] + 90
+#         #ellipse = draw_ellipse(theta)
+#         det_normal += 1
+#         aruco_center = track_aruco(frame)
+#         return aruco_center

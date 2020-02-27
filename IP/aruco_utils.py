@@ -32,7 +32,7 @@ def detect_aruco(img):  #returns the detected aruco list dictionary with id: cor
             temp_2 = temp_2[0]
             aruco_list[temp_2] = temp_1
         #print(aruco_list)
-        return aruco_list
+    return aruco_list
 
 def mark_Aruco(img, aruco_list):    #function to mark the centre and display the id
     key_list = aruco_list.keys()
@@ -48,11 +48,15 @@ def mark_Aruco(img, aruco_list):    #function to mark the centre and display the
         orient_centre = tuple((dict_entry[0]+dict_entry[1])/2)
         #print centre
         #print orient_centre
-        cv2.circle(img,centre,1,(0,0,255),8)
-        cv2.circle(img,tuple(dict_entry[0]),1,(0,0,255),8)
-        cv2.circle(img,tuple(dict_entry[1]),1,(0,255,0),8)
-        cv2.circle(img,tuple(dict_entry[2]),1,(255,0,0),8)
-        cv2.circle(img,orient_centre,1,(0,0,255),8)
+        # cv2.circle(img,centre,1,(0,0,255),8)
+        # cv2.circle(img,tuple(dict_entry[0]),1,(0,0,255),8)
+        # cv2.circle(img,tuple(dict_entry[1]),1,(0,255,0),8)
+        # cv2.circle(img,tuple(dict_entry[2]),1,(255,0,0),8)
+        # cv2.circle(img,orient_centre,1,(0,0,255),8)
+
+        #draw a green square around the aruco
+        cv2.polyLines(img,dict_entry,1,(0,255,0),3)
+
         cv2.line(img,centre,orient_centre,(255,0,0),4) #marking the centre of aruco
         cv2.putText(img, str(key), (int(centre[0] + 20), int(centre[1])), font, 1, (0,0,255), 2, cv2.LINE_AA) # displaying the idno
     return img, centre
@@ -70,12 +74,29 @@ def draw_aruco(img,aruco_list):
         # cv2.circle(img,centre,1,(0,0,255),8)
         # cv2.circle(img,orient_centre,1,(0,0,255),8)
         # cv2.line(img,centre,orient_centre,(255,0,0),4) #marking the centre of aruco
-    return img, centre
+        return img, centre
 
 def track_aruco(img):
     aruco_list = detect_aruco(img)
     img, aruco_center = draw_aruco(img,aruco_list)
     return aruco_center
+
+###changes 
+#extra functions for drawing the remaining arucos
+def track_main_aruco(img):
+    aruco_list = detect_aruco(img)
+    img, aruco_center_25 = draw_aruco(img,list(aruco_list[25]))
+    return aruco_center_25
+
+def draw_other_arucos(img):
+    aruco_list = detect_aruco(img)    
+    try:
+        aruco_list = aruco_list.pop(25)      #delete the entry with key 25 if present 
+    except:
+        pass
+    img, other_aruco_center = mark_Aruco(img,aruco_list)
+    return img
+#######
 
 def calculate_Robot_State(img,aruco_list):  #gives the state of the bot (centre(x), centre(y), angle)
     robot_state = {}

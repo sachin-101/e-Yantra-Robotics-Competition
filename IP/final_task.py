@@ -6,10 +6,10 @@ import numpy as np
 import pandas as pd
 import math
 
-from aruco_utils import track_aruco, mask_bot, detect_aruco, mark_Aruco, calculate_Robot_State
+from aruco_utils import track_aruco, mask_bot, detect_aruco, mark_Aruco, calculate_Robot_State, track_main_aruco, draw_other_arucos
 from arena_utils import extract_region, get_coordinates, detect_origin, detect_coins
 from node import Node, sort_nodes
-from deblurring import aruco_using_deblur
+from deblurring import deblur
 
 # ranges of hsv values
 purple_low = np.array([100,100,20])
@@ -50,17 +50,17 @@ def order_green_coins(origin, nodes, cur_node, g_cords):
     angle2 = calc_angle(origin, (cur_node.x, cur_node.y), (n_green2.x, n_green2.y))
     
     # Don't do mistake here 
+    # Changed it to take the later one letter one
     if angle1 < angle2:
-        print(n_green1.x, n_green1.y)
-        print(n_green2.x, n_green2.y)
-        return (n_green1, g1_index), (n_green2, g2_index)
+        return (n_green2, g1_index), (n_green1, g2_index)
     else:
-        return (n_green2, g2_index), (n_green1, g1_index)
+        return (n_green1, g2_index), (n_green2, g1_index)
 
 def show_img(img, name):
     cv2.imshow(name, img)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
+   
 
 def get_trajectory(img):
     shape = img.shape
@@ -83,17 +83,12 @@ def get_trajectory(img):
     origin, _ = detect_origin(purple_region,img)
 
     # detect coin cords
-    print('-'*10)
-    print(type(purple_region))
     red_cords = detect_coins(purple_region,red_low,red_high,"red")[0]
     green_cords = detect_coins(purple_region,green_low,green_high,"green")
-    print('r_cords (x,y)', red_cords)
-    print("g_cords (x,y)", green_cords)
 
     detected_nodes = [Node(x, y) for (x, y) in cords]
     
     aruco_center = track_aruco(img)
-    print("aruco_center", aruco_center)
     #Appending the capital node(which is the aruco center) to the nodes list
     aruco_center_node = Node(aruco_center[0],aruco_center[1])
     detected_nodes.append(aruco_center_node)
@@ -125,20 +120,27 @@ def get_trajectory(img):
 def send_data(sender, data):
     #print('Send data:', data)
     output = sender.write(str.encode(str(data)))
-    time.sleep(0.1)
+    time.sleep(0.5)
     
 
 def main():
     
     #serial communication
-    port = "COM9"
+    port = "COM11"
     sender = serial.Serial(port,9600)
     
     #threshold values 
-    coin_threshold = 5
-    reset_threshold = 8
+    coin_threshold = 6
+    reset_threshold = 20
+
+    # deblurring params
+    len_psf = 4
+    beta = 6000
+    d = 4
+    sigmaColor = 30
+    sigmaSpace = 30
     
-    stopped, done = False, False
+    stopped, reset, done = False, False, False
     stopped_frames, end_frames = 0, 0
 
     cap = cv2.VideoCapture(0) # webcam, then 1
@@ -149,66 +151,89 @@ def main():
     cap.set(4, 480)
     
     # get initial frame
-    ret, frame = cap.read()    
+    ret, frame = cap.read()   
+    frame_init = frame
+
     trajectory, origin, nodes = get_trajectory(frame)
     path_checkpoint = 0
     n_target = trajectory[path_checkpoint]
+ 
+    send_data(sender, data='m')  # c denotes start data
+    print("Send data: m \t Bot starts moving")
 
-    # Marking aruco 
-    show_img(frame, 'frame_passed_to_detect_aruco')
-    aruco_list = detect_aruco(frame)
-    show_img(frame, 'frame_passed_to_find_aruco')
-    frame, aruco_centre = mark_Aruco(frame, aruco_list)
-    state = calculate_Robot_State(frame, aruco_list)
     
-    # marking nodes
-    for i, n in enumerate(nodes):
-        cv2.circle(frame,(n.x,n.y),3,(255,255,0),-1)
-        cv2.putText(frame, f'{i+1}', (int(n.x), int(n.y)), cv2.FONT_HERSHEY_COMPLEX, 1, (0,255,0), 2)
-       
-    
-    send_data(sender, data='c')  # c denotes start data
-    print("Send data: c \t Bot starts moving")
 
     while (ret):
         ret, frame = cap.read()          
-        cv2.imshow("window", frame)
-        cv2.waitKey(int(1000/fps)) 
+       
+        try:
+            # Marking aruco 
+            aruco_list = detect_aruco(frame)
+            
+            #########################################
+            # DEBLURRING
+            # if aruco_list is None:
+            #     deblurring = True
+            #     frame, kernel, S, filtered_img, norm_img = deblur(frame, len_psf, theta, beta, d, sigmaColor, sigmaSpace, frame_init)
+            #     aruco_list = detect_aruco(frame)
+            #     if aruco_list is not None:
+            #         print("Deblurred and detected aruco")
 
-        # Updating aruco center using deblurred frame
-        aruco_center_new = aruco_using_deblur(frame)
-        if aruco_center_new:
-            aruco_center = aruco_center_new
+            aruco_center = track_aruco(frame)
+            state = calculate_Robot_State(frame, aruco_list)
+            #other_arucos = draw_other_arucos(frame)
+            #cv2.imshow("other_arucos",other_arucos)
+            #theta = -state[25][3] + 90
+                
+        except Exception as e:
+            #print("Error", e)
+            #print("Could not detected even after deblurring")
+            pass
+        cv2.imshow("window", frame)
+        cv2.waitKey(int(1000/fps))
+
+        # marking nodes
+        for i, n in enumerate(nodes):
+            cv2.circle(frame,(n.x,n.y),3,(255,255,0),-1)
+            cv2.putText(frame, f'{i+1}', (int(n.x), int(n.y)), cv2.FONT_HERSHEY_COMPLEX, 1, (0,255,0), 2)
 
         angle = calc_angle(origin, (n_target.x, n_target.y), aruco_center)
-        print("Bot starts moving",angle)
-
+        #print("Bot starts moving",angle)
+        
         if not done:
-            if angle < reset_threshold: 
-                send_data(sender, data='r') # r denotes reset servo
-                print("Send data: r \t Striking mechanism reset")
-
-            elif angle < coin_threshold:
+            if angle < coin_threshold:
                 if not stopped:
                     send_data(sender, data='s') # s denotes stop
-                    print("Send data: s \t Bot stops to strike")
-                    stopped = True         
+                    print("Send data: s \t Bot stops")        
+                    stopped = True      
                 else:
                     stopped_frames += 1
-
-                # 40 seconds to hit the coin
-                if stopped and stopped_frames == int(fps*40):
-                    path_checkpoint += 1
-                    n_target = trajectory[path_checkpoint] # update the target node
-                    send_data(sender, data='c') # c denotes move
-                    print("Send data: c \t Bot starts moving")
-                    stopped = False
-
-                if path_checkpoint == 3:
-                    done = True
-                    send_data(sender, data='l') # l denotes long beep
-                    print("Send data: l \t Bot reached capital")
-        
+                   
+                # 4 seconds to hit the coin
+                if stopped: 
+                    if stopped_frames == int(fps*1):  # Beep the buzzer twice
+                        for _ in range(2):  # Beep buzzer twice
+                            send_data(sender, data='b')
+                            print("Send data: b \t Beep buzzer")
+                    # elif stopped_frames == int(fps*2): # reset the servo
+                    #     send_data(sender, data='r')
+                    #     print("Send data: r \t Reset Servo")
+                    elif stopped_frames == int(fps*2): # hit the coin
+                        send_data(sender, data='h')
+                        print("Send data: h \t Hit the coin")
+                    elif stopped_frames == int(fps*4):
+                        path_checkpoint += 1
+                        if path_checkpoint == 3:
+                            done = True
+                            send_data(sender, data='l') # l denotes long beep
+                            print("Send data: l \t Bot reached capital")
+                            break                       
+                        n_target = trajectory[path_checkpoint] # update the target node
+                        send_data(sender, data='m') # c denotes move
+                        print('-'*10, '\n', "Send data: m \t Bot starts moving")
+                        stopped = False
+                        stopped_frames = 0
+                    
         else:  # To stop the feed from closing after reaching capital
             if end_frames >= int(fps*4):
                 cap.release() # stop video capture
