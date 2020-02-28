@@ -5,7 +5,7 @@ import time
 import math
 import csv
 import cv2.aruco as aruco
-from aruco_utils import detect_aruco,draw_aruco,calculate_Robot_State,track_aruco
+from aruco_utils import detect_aruco, calculate_Robot_State
 import copy
 
 
@@ -78,8 +78,8 @@ def deblur(ip_image, len_psf, theta, beta, d, sigmaColor, sigmaSpace, orig_img):
 # 	return h
 
 
-def callback(*arg):
-    pass
+# def callback(*arg):
+#     pass
 
 
 # def aruco_using_deblur(frame):

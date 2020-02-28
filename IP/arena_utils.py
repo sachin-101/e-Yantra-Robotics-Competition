@@ -5,7 +5,7 @@ from aruco_utils import detect_aruco
 
 def filter_img(mask):
     #filtering the mask
-    kernel = np.ones((5,5),np.uint8)
+    kernel = np.ones((3,3),np.uint8)
     opening = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
     dilate = cv2.dilate(opening,kernel,iterations = 1)  ###increase iterations for detection in low light 
     return dilate
@@ -36,11 +36,17 @@ def detect_coins(purple_region,low,high,colour):
     purple_region = cv2.cvtColor(purple_region,cv2.COLOR_BGR2HSV)
     final_mask = np.zeros_like(purple_region)[..., 0]
     colour_mask = cv2.inRange(purple_region, low, high)
-    final_mask = cv2.bitwise_or(final_mask, colour_mask)
-    colour_mask = filter_img(final_mask)
+    show_img(colour_mask, f'{colour}')
+    colour_mask = filter_img(colour_mask)
+    show_img(colour_mask, f'{colour}_after_filter_img')
     coins = min_area_contour(colour_mask,purple_region,colour)
     return coins
 
+
+def show_img(img, name):
+    cv2.imshow(name, img)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
 
 def min_area_contour(mask,img,colour):
     cnt,hierarchy = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -48,14 +54,16 @@ def min_area_contour(mask,img,colour):
     coins = []
     for i in range(len(cnt)):
         area.append(cv2.contourArea(cnt[i]))
+    print("INitially", area)
     area_min = np.argmin(area)
     (x1,y1),rad1 = cv2.minEnclosingCircle(cnt[area_min])
     coin1 = (int(x1),int(y1))
     coins.append(coin1)
-    
+   
     if colour == "green":
         del area[area_min]
         del cnt[area_min]
+        print("After deleting first one", area)
         area_min_2 = np.argmin(area)
         (x2,y2),rad2 = cv2.minEnclosingCircle(cnt[area_min_2])
         coin2 = (int(x2),int(y2))
@@ -65,7 +73,7 @@ def min_area_contour(mask,img,colour):
 def get_coordinates(highway,img):
     #get the nodes in the ROI
     ret,th1 = cv2.threshold(highway,100,255,cv2.THRESH_BINARY)
-    kernel1 = np.ones((5,5),np.uint8)
+    kernel1 = np.ones((3,3),np.uint8)
     kernel2 = np.ones((3,3),np.uint8)
     erosion = cv2.erode(th1,kernel1,iterations = 1)
     opening = cv2.morphologyEx(erosion, cv2.MORPH_OPEN, kernel2)

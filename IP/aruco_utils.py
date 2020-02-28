@@ -3,6 +3,8 @@ import numpy as np
 import cv2.aruco as aruco
 import math 
 
+BOT_ARUCO = 25
+
 def angle_calculate(pt1,pt2, trigger = 0):  # function which returns angle between two points in the range of 0-359
     angle_list_1 = list(range(359,0,-1))
     #angle_list_1 = angle_list_1[90:] + angle_list_1[:90]
@@ -41,62 +43,43 @@ def mark_Aruco(img, aruco_list):    #function to mark the centre and display the
         dict_entry = aruco_list[key]    #dict_entry is a numpy array with shape (4,2)
         centre = dict_entry[0] + dict_entry[1] + dict_entry[2] + dict_entry[3]#so being numpy array, addition is not list addition
         centre[:] = [int(x / 4) for x in centre]    #finding the centre
-        #print centre
         orient_centre = centre + [0.0,5.0]
-        #print orient_centre
         centre = tuple(centre)  
         orient_centre = tuple((dict_entry[0]+dict_entry[1])/2)
-        #print centre
-        #print orient_centre
-        # cv2.circle(img,centre,1,(0,0,255),8)
+        
+        cv2.circle(img,centre,1,(0,0,255),8)
+        cv2.circle(img,orient_centre,1,(0,0,255),8)
+
         # cv2.circle(img,tuple(dict_entry[0]),1,(0,0,255),8)
         # cv2.circle(img,tuple(dict_entry[1]),1,(0,255,0),8)
         # cv2.circle(img,tuple(dict_entry[2]),1,(255,0,0),8)
-        # cv2.circle(img,orient_centre,1,(0,0,255),8)
-
-        #draw a green square around the aruco
-        cv2.polyLines(img,dict_entry,1,(0,255,0),3)
-
+        
+        # draw a green square around the aruco
+        #cv2.polylines(img,dict_entry,1,(0,255,0),3)
         cv2.line(img,centre,orient_centre,(255,0,0),4) #marking the centre of aruco
         cv2.putText(img, str(key), (int(centre[0] + 20), int(centre[1])), font, 1, (0,0,255), 2, cv2.LINE_AA) # displaying the idno
-    return img, centre
-
-
-def draw_aruco(img,aruco_list):
-    key_list = aruco_list.keys()
-    for key in key_list:
-        dict_entry = aruco_list[key]    #dict_entry is a numpy array with shape (4,2)
-        centre = dict_entry[0] + dict_entry[1] + dict_entry[2] + dict_entry[3]#so being numpy array, addition is not list addition
-        centre[:] = [int(x / 4) for x in centre]    #finding the centre
-        orient_centre = centre + [0.0,5.0]
-        centre = tuple(centre)  
-        orient_centre = tuple((dict_entry[0]+dict_entry[1])/2)
-        # cv2.circle(img,centre,1,(0,0,255),8)
-        # cv2.circle(img,orient_centre,1,(0,0,255),8)
-        # cv2.line(img,centre,orient_centre,(255,0,0),4) #marking the centre of aruco
-        return img, centre
-
-def track_aruco(img):
-    aruco_list = detect_aruco(img)
-    img, aruco_center = draw_aruco(img,aruco_list)
-    return aruco_center
-
-###changes 
-#extra functions for drawing the remaining arucos
-def track_main_aruco(img):
-    aruco_list = detect_aruco(img)
-    img, aruco_center_25 = draw_aruco(img,list(aruco_list[25]))
-    return aruco_center_25
-
-def draw_other_arucos(img):
-    aruco_list = detect_aruco(img)    
-    try:
-        aruco_list = aruco_list.pop(25)      #delete the entry with key 25 if present 
-    except:
-        pass
-    img, other_aruco_center = mark_Aruco(img,aruco_list)
     return img
-#######
+
+
+# def draw_aruco(img,aruco_list):
+#     key_list = aruco_list.keys()
+#     for key in key_list:
+#         dict_entry = aruco_list[key]    #dict_entry is a numpy array with shape (4,2)
+#         centre = dict_entry[0] + dict_entry[1] + dict_entry[2] + dict_entry[3]#so being numpy array, addition is not list addition
+#         centre[:] = [int(x / 4) for x in centre]    #finding the centre
+#         orient_centre = centre + [0.0,5.0]
+#         centre = tuple(centre)  
+#         orient_centre = tuple((dict_entry[0]+dict_entry[1])/2)
+#         # cv2.circle(img,centre,1,(0,0,255),8)
+#         # cv2.circle(img,orient_centre,1,(0,0,255),8)
+#         # cv2.line(img,centre,orient_centre,(255,0,0),4) #marking the centre of aruco
+#         return img, centre
+
+def get_aruco_center(aruco_dict_entry):
+    centre = aruco_dict_entry[0] + aruco_dict_entry[1] + aruco_dict_entry[2] + aruco_dict_entry[3]#so being numpy array, addition is not list addition
+    centre[:] = [int(x / 4) for x in centre]    #finding the centre
+    return tuple(centre)  
+
 
 def calculate_Robot_State(img,aruco_list):  #gives the state of the bot (centre(x), centre(y), angle)
     robot_state = {}
@@ -118,7 +101,8 @@ def calculate_Robot_State(img,aruco_list):  #gives the state of the bot (centre(
 
 
 def mask_bot(highway):
-    center = track_aruco(highway)
+    aruco_list = detect_aruco(highway)
+    center = get_aruco_center(aruco_list[BOT_ARUCO]) 
     x, y = center
     c1 = (x + 50, y + 50)
     c2 = (x + 50, y - 50)

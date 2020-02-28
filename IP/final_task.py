@@ -6,10 +6,20 @@ import numpy as np
 import pandas as pd
 import math
 
-from aruco_utils import track_aruco, mask_bot, detect_aruco, mark_Aruco, calculate_Robot_State, track_main_aruco, draw_other_arucos
+from aruco_utils import mask_bot, detect_aruco, mark_Aruco, calculate_Robot_State, get_aruco_center
 from arena_utils import extract_region, get_coordinates, detect_origin, detect_coins
 from node import Node, sort_nodes
 from deblurring import deblur
+
+# # ranges of hsv values
+# purple_low = np.array([100,100,20])
+# purple_high = np.array([155,255,255])
+# black_low = np.array([0,0,0])
+# black_high = np.array([255,255,80])
+# green_low = np.array([20,80,150])
+# green_high = np.array([50,250,255])
+# red_low = np.array([160,190,50])
+# red_high = np.array([179,255,255])
 
 # ranges of hsv values
 purple_low = np.array([100,100,20])
@@ -18,8 +28,9 @@ black_low = np.array([0,0,0])
 black_high = np.array([255,255,80])
 green_low = np.array([20,80,150])
 green_high = np.array([50,250,255])
-red_low = np.array([160,190,50])
-red_high = np.array([179,255,255])
+red_low = np.array([160,10,100])
+red_high = np.array([255,255,255])
+BOT_ARUCO = 25
     
 def calc_angle(origin,pt1,pt2):
     x0,y0 = origin
@@ -49,12 +60,26 @@ def order_green_coins(origin, nodes, cur_node, g_cords):
     angle1 = calc_angle(origin, (cur_node.x, cur_node.y), (n_green1.x, n_green1.y))
     angle2 = calc_angle(origin, (cur_node.x, cur_node.y), (n_green2.x, n_green2.y))
     
-    # Don't do mistake here 
-    # Changed it to take the later one letter one
+    # mag_angle1 = calc_angle(origin, (cur_node.x, cur_node.y), (n_green1.x, n_green1.y))
+    # mag_angle2 = calc_angle(origin, (cur_node.x, cur_node.y), (n_green2.x, n_green2.y))
+    
+    # Effective angle = 360 - |angle| if below line else |angle|
+    
+    # below_1 = n_green1.below_line(origin, aruco_center)
+    # below_2 = n_green2.below_line(origin, aruco_center)
+
+    # angle1 = 360 - mag_angle1 if below_1 else mag_angle1
+    # angle2 = 360 - mag_angle2 if below_2 else mag_angle2
+
+    # if angle1 < angle2:
+    #     return (n_green2, g2_index), (n_green1, g1_index)
+    # else:
+    #     return (n_green1, g1_index), (n_green2, g2_index)
+
     if angle1 < angle2:
-        return (n_green2, g1_index), (n_green1, g2_index)
+        return (n_green2, g2_index), (n_green1, g1_index)
     else:
-        return (n_green1, g2_index), (n_green2, g1_index)
+        return (n_green1, g1_index), (n_green2, g2_index)
 
 def show_img(img, name):
     cv2.imshow(name, img)
@@ -88,8 +113,11 @@ def get_trajectory(img):
 
     detected_nodes = [Node(x, y) for (x, y) in cords]
     
-    aruco_center = track_aruco(img)
-    #Appending the capital node(which is the aruco center) to the nodes list
+    # track aruco
+    aruco_list = detect_aruco(img)
+    aruco_center = get_aruco_center(aruco_list[BOT_ARUCO]) 
+    
+    # Appending the capital node(which is the aruco center) to the nodes list
     aruco_center_node = Node(aruco_center[0],aruco_center[1])
     detected_nodes.append(aruco_center_node)
 
@@ -154,6 +182,9 @@ def main():
     ret, frame = cap.read()   
     frame_init = frame
 
+    cv2.imwrite('detect_red_hsv.png', frame)
+    print('-'*10, 'image saved')
+
     trajectory, origin, nodes = get_trajectory(frame)
     path_checkpoint = 0
     n_target = trajectory[path_checkpoint]
@@ -161,14 +192,19 @@ def main():
     send_data(sender, data='m')  # c denotes start data
     print("Send data: m \t Bot starts moving")
 
+    aruco_list = detect_aruco(frame)
+    aruco_center = get_aruco_center(aruco_list[BOT_ARUCO])
+
     
 
     while (ret):
         ret, frame = cap.read()          
        
         try:
-            # Marking aruco 
+            # Detecting aruco 
             aruco_list = detect_aruco(frame)
+            if len(aruco_list) > 1:
+                print("DEtected more than 1 aruco")
             
             #########################################
             # DEBLURRING
@@ -179,23 +215,24 @@ def main():
             #     if aruco_list is not None:
             #         print("Deblurred and detected aruco")
 
-            aruco_center = track_aruco(frame)
-            state = calculate_Robot_State(frame, aruco_list)
+            aruco_center = get_aruco_center(aruco_list[BOT_ARUCO]) 
+            # state = calculate_Robot_State(frame, aruco_list)
             #other_arucos = draw_other_arucos(frame)
             #cv2.imshow("other_arucos",other_arucos)
             #theta = -state[25][3] + 90
                 
         except Exception as e:
-            #print("Error", e)
+            print("Error", e)
             #print("Could not detected even after deblurring")
-            pass
-        cv2.imshow("window", frame)
-        cv2.waitKey(int(1000/fps))
-
+ 
         # marking nodes
         for i, n in enumerate(nodes):
             cv2.circle(frame,(n.x,n.y),3,(255,255,0),-1)
             cv2.putText(frame, f'{i+1}', (int(n.x), int(n.y)), cv2.FONT_HERSHEY_COMPLEX, 1, (0,255,0), 2)
+
+        frame = mark_Aruco(frame, aruco_list)
+        cv2.imshow("window", frame)
+        cv2.waitKey(int(1000/fps))
 
         angle = calc_angle(origin, (n_target.x, n_target.y), aruco_center)
         #print("Bot starts moving",angle)
