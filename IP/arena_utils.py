@@ -36,9 +36,7 @@ def detect_coins(purple_region,low,high,colour):
     purple_region = cv2.cvtColor(purple_region,cv2.COLOR_BGR2HSV)
     final_mask = np.zeros_like(purple_region)[..., 0]
     colour_mask = cv2.inRange(purple_region, low, high)
-    show_img(colour_mask, f'{colour}')
     colour_mask = filter_img(colour_mask)
-    show_img(colour_mask, f'{colour}_after_filter_img')
     coins = min_area_contour(colour_mask,purple_region,colour)
     return coins
 
@@ -54,7 +52,6 @@ def min_area_contour(mask,img,colour):
     coins = []
     for i in range(len(cnt)):
         area.append(cv2.contourArea(cnt[i]))
-    print("INitially", area)
     area_min = np.argmin(area)
     (x1,y1),rad1 = cv2.minEnclosingCircle(cnt[area_min])
     coin1 = (int(x1),int(y1))
@@ -63,7 +60,6 @@ def min_area_contour(mask,img,colour):
     if colour == "green":
         del area[area_min]
         del cnt[area_min]
-        print("After deleting first one", area)
         area_min_2 = np.argmin(area)
         (x2,y2),rad2 = cv2.minEnclosingCircle(cnt[area_min_2])
         coin2 = (int(x2),int(y2))
